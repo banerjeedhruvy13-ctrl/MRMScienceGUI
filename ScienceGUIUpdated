@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Science GUI</title>
+
+<!-- ===== REACT ===== -->
+<script src="https://unpkg.com/supersimpledev/react.js"></script>
+<script src="https://unpkg.com/supersimpledev/react-dom.js"></script>
+<script src="https://unpkg.com/supersimpledev/babel.js"></script>
+
+<!-- ===== SOCKET.IO CLIENT ===== -->
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script> 
+
+<style>
+* { box-sizing: border-box; font-family: Arial, Helvetica, sans-serif; }
+body { margin: 0; background: black; color: white; }
+
+/* ===== HEADER ===== */
+.header { display: flex; justify-content: space-between; align-items: center; padding: 16px 36px; }
+.header-left { display: flex; align-items: center; gap: 14px; }
+.logo { width: 52px; height: 52px; border-radius: 50%; }
+.title { font-size: 18px; font-weight: bold; }
+.nav { display: flex; gap: 16px; }
+.nav button { background: none; border: 2px solid #888; color: white; padding: 8px 18px; border-radius: 8px; cursor: pointer; font-weight: bold; }
+.nav button.active { background: white; color: black; }
+
+/* ===== PAGES ===== */
+.page { padding: 30px 40px; }
+
+/* ===== PAGE 1 ===== */
+.page1-grid { display: grid; grid-template-columns: 3fr 2fr; grid-template-rows: auto auto; column-gap: 30px; row-gap: 10px; padding: 12px; }
+.graph { grid-row: 1 / span 2; height: 475px; background: #dff3ff; border-radius: 30px; display: flex; align-items: center; justify-content: center; color: black; font-size: 24px; font-weight: bold; }
+.microscope { height: 260px; background: #dff3ff; border-radius: 16px; display: flex; align-items: center; justify-content: center; color: black; font-size: 22px; font-weight: bold; }
+.soil { border: 2px solid white; border-radius: 14px; padding: 16px; }
+.soil-title { text-align: center; margin: 0; font-size: 20px; }
+.soil-line { border-top: 1px solid white; margin: 11px -20px 15px; }
+.soil p { margin: 6px 0; }
+
+/* ===== PAGE 2 ===== */
+.sensor-grid { display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(2, 1fr); gap: 30px; padding: 16px; }
+.sensor { border: 2px solid #aaa; border-radius: 14px; min-height: 220px; display: flex; flex-direction: column; }
+.sensor-title { text-align: center; padding: 14px; border-bottom: 2px solid #aaa; font-size: 18px; font-weight: bold; }
+.sensor-body { padding: 20px; line-height: 2; }
+
+/* ===== RESPONSIVE ===== */
+@media (max-width: 900px) {
+  .page1-grid, .sensor-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+
+<body>
+
+<div id="root"></div>
+
+<script type="text/babel">
+
+// ====== CUSTOM HOOK: USE SOCKET.IO FOR SENSOR DATA ======
+function useSensorSocket() {
+  const [data, setData] = React.useState({});
+  const socketRef = React.useRef(null);
+
+  React.useEffect(() => {
+    // Connect to Raspberry Pi WebSocket server
+    socketRef.current = io("http://10.0.0.67:5000");
+
+    socketRef.current.on("sensor_data", (incoming) => {
+      setData(incoming);
+    });
+
+    socketRef.current.on("connect", () => console.log("Connected to Pi"));
+    socketRef.current.on("disconnect", () => console.log("Disconnected from Pi"));
+
+    return () => {
+      socketRef.current.disconnect();
+    };
+  }, []);
+
+  return data;
+}
+
+// ====== HEADER COMPONENT ======
+function Header({ page, setPage }) {
+  return (
+    <div className="header">
+      <div className="header-left">
+        <img src="images/logo.png" className="logo" />
+        <div className="title">Science GUI</div>
+      </div>
+
+      <div className="nav">
+        <button className={page === 1 ? "active" : ""} onClick={() => setPage(1)}>LEIA</button>
+        <button className={page === 2 ? "active" : ""} onClick={() => setPage(2)}>HAN</button>
+      </div>
+    </div>
+  );
+}
+
+// ====== PAGE 1: LEIA ======
+function PageLEIA({ data }) {
+  return (
+    <div className="page">
+      <h2>LEIA</h2>
+      <div className="page1-grid">
+        <div className="graph">
+          AS7431 Graph<br/>
+          {data.as7431 || "--"}
+        </div>
+
+        <div className="microscope">Microscope Feed</div>
+
+        <div className="soil">
+          <h3 className="soil-title">Soil Probe</h3>
+          <hr className="soil-line"/>
+          <p>Soil Temperature – {data.soilTemp || "--"} °C</p>
+          <p>Soil Moisture – {data.soilMoisture || "--"} %</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ====== PAGE 2: HAN ======
+function PageHAN({ data }) {
+  return (
+    <div className="page">
+      <h2>HAN</h2>
+      <div className="sensor-grid">
+        <Sensor title="SGP30" body={`TVOC - ${data.tvoc || "--"} ppb\neCO2 - ${data.eco2 || "--"} ppm`} />
+        <Sensor title="MQ4" body={`Methane - ${data.methane || "--"} ppm\nCO - ${data.co || "--"} ppm`} />
+        <Sensor title="MQ135" body={`NH3 - ${data.nh3 || "--"} ppm\nCO2 - ${data.co2+400 || "--"} ppm`} />
+        <Sensor title="TSL2591" body={`Intensity - ${data.light || "--"} lux\nIR`} />
+        <Sensor title="SHT31D" body={`Temp - ${data.temp || "--"} ℃\nHumidity - ${data.humidity || "--"} %`} />
+        <Sensor title="BMP688" body={`Pressure - ${data.pressure || "--"} hPa`} />
+      </div>
+    </div>
+  );
+}
+
+// ====== SENSOR CARD COMPONENT ======
+function Sensor({ title, body }) {
+  return (
+    <div className="sensor">
+      <div className="sensor-title">{title}</div>
+      <div className="sensor-body">
+        {body.split("\n").map((l,i)=><div key={i}>{l}</div>)}
+      </div>
+    </div>
+  );
+}
+
+// ====== APP COMPONENT ======
+function App() {
+  const [page, setPage] = React.useState(1);
+  const data = useSensorSocket(); // live data from Pi
+
+  return (
+    <>
+      <Header page={page} setPage={setPage} />
+      {page === 1 && <PageLEIA data={data} />}
+      {page === 2 && <PageHAN data={data} />}
+    </>
+  );
+}
+
+// ====== RENDER ======
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+
+</script>
+
+</body>
+</html>
